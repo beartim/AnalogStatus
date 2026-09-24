@@ -68,8 +68,8 @@ jobs:
           echo "THEOS=$THEOS"
           echo "SDK=iPhoneOS${IOS_SDK_VERSION}.sdk"
           find "$THEOS/sdks" -maxdepth 1 -type d -name 'iPhoneOS*.sdk' -printf '%f\n' | sort
-          make --version | head -n 1
-          dpkg-deb --version | head -n 1
+          make --version
+          dpkg-deb --version
 
       - name: Build rootful iOS 9 package
         run: |
