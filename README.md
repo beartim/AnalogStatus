@@ -29,7 +29,7 @@ A ready-to-use workflow is included at:
 .github/workflows/build.yml
 ```
 
-Push this directory as the repository root, then either push to `main`/`master` or use **Actions → Build AnalogStatus iOS 9 DEB → Run workflow**. The job downloads Theos plus the official patched iPhoneOS 9.3 SDK, builds the tweak, verifies the package and both architecture slices, and uploads the `.deb` and logs as the `AnalogStatus-1.3-4-opt-ios9` artifact.
+Push this directory as the repository root, then either push to `main`/`master` or use **Actions → Build AnalogStatus iOS 9 DEB → Run workflow**. The job downloads Theos, the Linux iOS toolchain, and the historical iPhoneOS 9.2 SDK pinned to a fixed GitHub commit, builds the tweak, verifies the package and both architecture slices, and uploads the `.deb` and logs as the `AnalogStatus-1.3-4-opt-ios9` artifact.
 
 See `docs/GITHUB_ACTIONS.md` for setup and troubleshooting details.
 
@@ -41,7 +41,7 @@ Install Theos with a patched iOS SDK, then run:
 THEOS=/opt/theos ./build-ios9.sh
 ```
 
-The default SDK for the current source is iPhoneOS 9.3 because it is available from the maintained official `theos/sdks` repository. If you already have the historical 9.2 SDK installed, it remains selectable:
+The default SDK is iPhoneOS 9.2. This is intentional for Linux: the 9.3 patched SDK can fail with legacy `.tbd` stubs such as `/usr/lib/system/liblaunch.dylib`, while the historical Theos Linux guidance recommends the 9.2 SDK for this toolchain generation.
 
 ```sh
 THEOS=/opt/theos IOS_SDK_VERSION=9.2 ./build-ios9.sh
