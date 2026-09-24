@@ -16,11 +16,11 @@ concurrency:
 
 env:
   THEOS: ${{ github.workspace }}/theos
-  IOS_SDK_VERSION: '9.3'
+  IOS_SDK_VERSION: '9.2'
 
 jobs:
   build:
-    name: armv7 + arm64 / iPhoneOS 9.3 SDK
+    name: armv7 + arm64 / iPhoneOS 9.2 SDK
     runs-on: ubuntu-22.04
     timeout-minutes: 25
 
@@ -33,7 +33,7 @@ jobs:
           set -euxo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            bash build-essential ca-certificates curl dpkg-dev fakeroot file git \
+            bash bzip2 build-essential ca-certificates curl dpkg-dev fakeroot file git \
             libtinfo6 perl python3 rsync xz-utils
           sudo apt-get install -y --no-install-recommends ldid || true
 
@@ -53,13 +53,15 @@ jobs:
           test -x "$THEOS/toolchain/linux/iphone/bin/clang"
           "$THEOS/toolchain/linux/iphone/bin/clang" --version | head -n 2
 
-      - name: Install patched iPhoneOS 9.3 SDK
+      - name: Install historical iPhoneOS 9.2 SDK
         run: |
           set -euxo pipefail
-          git clone --depth 1 https://github.com/theos/sdks.git /tmp/theos-sdks
-          test -d "/tmp/theos-sdks/iPhoneOS${IOS_SDK_VERSION}.sdk"
+          SDK_COMMIT=d110ecedf76b4cdae885242f107951a130c71487
+          SDK_URL="https://raw.githubusercontent.com/Sn0wCooder/theos-sdks/${SDK_COMMIT}/iPhoneOS9.2.sdk.tbz2"
           mkdir -p "$THEOS/sdks"
-          cp -a "/tmp/theos-sdks/iPhoneOS${IOS_SDK_VERSION}.sdk" "$THEOS/sdks/"
+          curl -fL --retry 3 "$SDK_URL" -o /tmp/iPhoneOS9.2.sdk.tbz2
+          file /tmp/iPhoneOS9.2.sdk.tbz2
+          tar -xjf /tmp/iPhoneOS9.2.sdk.tbz2 -C "$THEOS/sdks"
           test -d "$THEOS/sdks/iPhoneOS${IOS_SDK_VERSION}.sdk"
 
       - name: Show build environment
