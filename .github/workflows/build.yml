@@ -1,0 +1,106 @@
+name: Build AnalogStatus iOS 9 DEB
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: analogstatus-build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  THEOS: ${{ github.workspace }}/theos
+  IOS_SDK_VERSION: '9.3'
+
+jobs:
+  build:
+    name: armv7 + arm64 / iPhoneOS 9.3 SDK
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install host dependencies
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bash build-essential ca-certificates curl dpkg-dev fakeroot file git \
+            libtinfo6 perl python3 rsync xz-utils
+          sudo apt-get install -y --no-install-recommends ldid || true
+
+      - name: Install Theos
+        run: |
+          set -euxo pipefail
+          git clone --recursive --depth 1 https://github.com/theos/theos.git "$THEOS"
+
+      - name: Install iOS Linux toolchain
+        run: |
+          set -euxo pipefail
+          mkdir -p "$THEOS/toolchain"
+          curl -fL --retry 3 \
+            https://github.com/L1ghtmann/llvm-project/releases/latest/download/iOSToolchain-x86_64.tar.xz \
+            -o /tmp/iOSToolchain.tar.xz
+          tar -xJf /tmp/iOSToolchain.tar.xz -C "$THEOS/toolchain"
+          test -x "$THEOS/toolchain/linux/iphone/bin/clang"
+          "$THEOS/toolchain/linux/iphone/bin/clang" --version | head -n 2
+
+      - name: Install patched iPhoneOS 9.3 SDK
+        run: |
+          set -euxo pipefail
+          git clone --depth 1 https://github.com/theos/sdks.git /tmp/theos-sdks
+          test -d "/tmp/theos-sdks/iPhoneOS${IOS_SDK_VERSION}.sdk"
+          mkdir -p "$THEOS/sdks"
+          cp -a "/tmp/theos-sdks/iPhoneOS${IOS_SDK_VERSION}.sdk" "$THEOS/sdks/"
+          test -d "$THEOS/sdks/iPhoneOS${IOS_SDK_VERSION}.sdk"
+
+      - name: Show build environment
+        run: |
+          set -euxo pipefail
+          echo "THEOS=$THEOS"
+          echo "SDK=iPhoneOS${IOS_SDK_VERSION}.sdk"
+          find "$THEOS/sdks" -maxdepth 1 -type d -name 'iPhoneOS*.sdk' -printf '%f\n' | sort
+          make --version | head -n 1
+          dpkg-deb --version | head -n 1
+
+      - name: Build rootful iOS 9 package
+        run: |
+          set -o pipefail
+          chmod +x build-ios9.sh scripts/verify-package.sh scripts/check-fat-mach-o.py
+          ./build-ios9.sh 2>&1 | tee build.log
+
+      - name: Verify DEB metadata, files and architectures
+        run: |
+          set -euo pipefail
+          mapfile -t packages < <(find packages -maxdepth 1 -type f -name '*.deb' | sort)
+          if [[ ${#packages[@]} -ne 1 ]]; then
+            echo "error: expected exactly one .deb, found ${#packages[@]}" >&2
+            printf '%s\n' "${packages[@]}" >&2
+            exit 1
+          fi
+          ./scripts/verify-package.sh "${packages[0]}" 2>&1 | tee verify.log
+
+      - name: Collect outputs
+        if: always()
+        run: |
+          mkdir -p artifacts
+          find packages -maxdepth 1 -type f -name '*.deb' -exec cp -v {} artifacts/ \; 2>/dev/null || true
+          cp -v build.log artifacts/ 2>/dev/null || true
+          cp -v verify.log artifacts/ 2>/dev/null || true
+
+      - name: Upload DEB and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnalogStatus-1.3-4-opt-ios9
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 30
