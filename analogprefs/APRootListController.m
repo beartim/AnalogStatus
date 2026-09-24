@@ -1,14 +1,24 @@
 #import "APRootListController.h"
-#import <UIKit/UIKit.h>
+#import <CoreFoundation/CoreFoundation.h>
+#import <objc/runtime.h>
 #include <stdlib.h>
+
+static const void *kAPSpecifiersKey = &kAPSpecifiersKey;
 
 @implementation APRootListController
 
 - (NSArray *)specifiers {
-    if (!_specifiers) {
-        _specifiers = [self loadSpecifiersFromPlistName:@"Root" target:self];
+    NSArray *specifiers = objc_getAssociatedObject(self, kAPSpecifiersKey);
+    if (!specifiers) {
+        specifiers = [self loadSpecifiersFromPlistName:@"Root" target:self];
+        if (specifiers) {
+            objc_setAssociatedObject(self,
+                                     kAPSpecifiersKey,
+                                     specifiers,
+                                     OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
     }
-    return _specifiers;
+    return specifiers;
 }
 
 - (void)respring {
