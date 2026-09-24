@@ -339,10 +339,10 @@ static void ASPrefsChanged(CFNotificationCenterRef center,
     }
 
     UIColor *textColor = nil;
-    if ([self respondsToSelector:@selector(foregroundStyle)]) {
+    if ([(id)self respondsToSelector:@selector(foregroundStyle)]) {
         id style = [(id)self foregroundStyle];
         if ([style respondsToSelector:@selector(textColorForStyle:)] &&
-            [self respondsToSelector:@selector(legibilityStyle)]) {
+            [(id)self respondsToSelector:@selector(legibilityStyle)]) {
             textColor = [style textColorForStyle:[(id)self legibilityStyle]];
         }
     }
