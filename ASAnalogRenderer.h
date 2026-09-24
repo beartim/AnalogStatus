@@ -1,5 +1,8 @@
 #import <UIKit/UIKit.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 UIImage *ASAnalogClockImage(CGFloat diameter,
                             UIColor *color,
@@ -10,3 +13,6 @@ UIImage *ASAnalogClockImage(CGFloat diameter,
 
 void ASClearAnalogClockCache(void);
 
+#ifdef __cplusplus
+}
+#endif
