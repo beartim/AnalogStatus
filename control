@@ -1,0 +1,12 @@
+Package: com.faz.analog.optimized
+Name: AnalogStatus (1.3-4 Optimized)
+Version: 1.3-4+opt
+Architecture: iphoneos-arm
+Description: Reimplementation of AnalogStatus 1.3-4 preserving the iOS 9 lock-screen analog clock while fixing lifecycle, safety, rendering and preference issues.
+Maintainer: local rebuild
+Author: faz / optimized reimplementation
+Section: Tweaks
+Depends: firmware (>= 7.0), firmware (<< 10.0), mobilesubstrate (>= 0.9.5000), preferenceloader
+Conflicts: com.faz.analog
+Replaces: com.faz.analog
+Tag: purpose::extension, compatible::ios9

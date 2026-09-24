@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>title</key><string>AnalogStatus</string>
+    <key>items</key>
+    <array>
+        <dict>
+            <key>cell</key><string>PSGroupCell</string>
+            <key>label</key><string>StatusBar</string>
+            <key>footerText</key><string>Uses the legacy iOS 7–9 status-bar implementation from AnalogStatus 1.3-4, with safer private-API access and a corrected time-item layout hook.</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSSwitchCell</string>
+            <key>default</key><true/>
+            <key>defaults</key><string>com.faz.analogprefs</string>
+            <key>key</key><string>SBEnabled</string>
+            <key>label</key><string>Enabled</string>
+            <key>PostNotification</key><string>com.faz.analogprefs/ReloadPrefs</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSGroupCell</string>
+            <key>label</key><string>LockScreen</string>
+            <key>footerText</key><string>Preserves the 1.3-4 large analog clock. Original date/time views are hidden instead of removed, so they remain recoverable.</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSSwitchCell</string>
+            <key>default</key><false/>
+            <key>defaults</key><string>com.faz.analogprefs</string>
+            <key>key</key><string>LSEnabled</string>
+            <key>label</key><string>Enabled</string>
+            <key>PostNotification</key><string>com.faz.analogprefs/ReloadPrefs</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSGroupCell</string>
+            <key>label</key><string>System</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSButtonCell</string>
+            <key>label</key><string>Respring</string>
+            <key>action</key><string>respring</string>
+        </dict>
+    </array>
+</dict>
+</plist>

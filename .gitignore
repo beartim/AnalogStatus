@@ -1,0 +1,7 @@
+.theos/
+obj/
+packages/
+artifacts/
+build.log
+verify.log
+.DS_Store

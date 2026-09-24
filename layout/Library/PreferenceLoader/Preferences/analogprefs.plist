@@ -1,0 +1,10 @@
+{
+    entry = {
+        bundle = analogprefs;
+        cell = PSLinkCell;
+        detail = APRootListController;
+        icon = "icon.png";
+        isController = 1;
+        label = AnalogStatus;
+    };
+}
