@@ -3,8 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleDevelopmentRegion</key><string>English</string>
+    <key>CFBundleDisplayName</key><string>AnalogStatus</string>
+    <key>CFBundleExecutable</key><string>analogprefs</string>
     <key>CFBundleIdentifier</key><string>com.faz.analogprefs</string>
     <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+    <key>CFBundleName</key><string>analogprefs</string>
     <key>CFBundlePackageType</key><string>BNDL</string>
     <key>CFBundleShortVersionString</key><string>1.3-4+opt</string>
     <key>CFBundleVersion</key><string>1.0</string>
