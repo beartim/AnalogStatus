@@ -86,15 +86,12 @@ static NSTimer *ASClockTimer(id controller) {
     return objc_getAssociatedObject(controller, ASTimerKey);
 }
 
-static UIView *ASLockHostView(id controller) {
+static UIScrollView *ASLockScrollView(id controller) {
     UIView *rootView = [controller respondsToSelector:@selector(view)] ? [controller view] : nil;
-    if (!rootView) return nil;
+    if (!rootView || ![rootView respondsToSelector:@selector(scrollView)]) return nil;
 
-    if ([rootView respondsToSelector:@selector(scrollView)]) {
-        id candidate = [(id)rootView scrollView];
-        if ([candidate isKindOfClass:[UIView class]]) return candidate;
-    }
-    return rootView;
+    id candidate = [(id)rootView scrollView];
+    return [candidate isKindOfClass:[UIScrollView class]] ? candidate : nil;
 }
 
 static void ASSetLockClockHidden(id controller, BOOL hidden) {
@@ -139,16 +136,22 @@ static void ASApplyLockLayout(id controller, BOOL forceImage) {
                             [controller hasNotifications];
     container.hidden = NO;
 
-    UIView *hostView = ASContainer(controller).superview ?: ASLockHostView(controller);
-    CGFloat screenWidth = hostView ? CGRectGetWidth(hostView.bounds) : CGRectGetWidth([UIScreen mainScreen].bounds);
+    /*
+     * AnalogStatus 1.3-4 places its lock-screen overlay on the center page of
+     * SBLockScreenView's horizontal scroll view.  In that coordinate system
+     * x == screenWidth is the page containing the clock and "slide to unlock";
+     * x == 0 is the adjacent page.  Keep the original constants recovered
+     * from the arm64 binary so the analog clock moves with the native page.
+     */
+    CGFloat screenWidth = CGRectGetWidth([UIScreen mainScreen].bounds);
     CGFloat diameter = hasNotifications ? 119.0 : 200.0;
     CGFloat hourLength = hasNotifications ? 29.75 : 50.0;
     CGFloat minuteLength = hasNotifications ? 50.575 : 85.0;
     CGFloat containerY = hasNotifications ? 28.5 : 30.0;
-    CGFloat containerHeight = hasNotifications ? 140.0 : 221.0;
+    CGFloat containerSize = hasNotifications ? 140.0 : 225.0;
     CGFloat dateY = hasNotifications ? 121.0 : 202.0;
 
-    container.frame = CGRectMake(0.0, containerY, screenWidth, containerHeight);
+    container.frame = CGRectMake(screenWidth, containerY, containerSize, containerSize);
     clockView.frame = CGRectMake((screenWidth - diameter) * 0.5, 0.0, diameter, diameter);
     dateLabel.frame = CGRectMake(0.0, dateY, screenWidth, 21.0);
 
@@ -227,7 +230,7 @@ static void ASInstallLockClock(id controller) {
         container = [[UIView alloc] initWithFrame:CGRectZero];
         container.backgroundColor = [UIColor clearColor];
         container.userInteractionEnabled = NO;
-        container.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+        container.clipsToBounds = NO;
 
         UIImageView *clockView = [[UIImageView alloc] initWithFrame:CGRectZero];
         clockView.contentMode = UIViewContentModeScaleAspectFit;
@@ -242,9 +245,9 @@ static void ASInstallLockClock(id controller) {
         [container addSubview:clockView];
         [container addSubview:dateLabel];
 
-        UIView *host = ASLockHostView(controller);
-        if (!host) return;
-        [host addSubview:container];
+        UIScrollView *scrollView = ASLockScrollView(controller);
+        if (!scrollView) return;
+        [scrollView addSubview:container];
 
         objc_setAssociatedObject(controller, ASContainerKey, container, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(controller, ASClockImageViewKey, clockView, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -378,9 +381,9 @@ static void ASPrefsChanged(CFNotificationCenterRef center,
 
 %hook SBLockScreenViewController
 - (void)viewDidLoad {
-    %orig;
     gCurrentLockController = self;
     if (gLockScreenEnabled) ASInstallLockClock(self);
+    %orig;
 }
 
 - (void)viewWillAppear:(BOOL)animated {
