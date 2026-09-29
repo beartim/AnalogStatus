@@ -6,7 +6,7 @@ include $(THEOS)/makefiles/common.mk
 
 BUNDLE_NAME = analogprefs
 analogprefs_FILES = APRootListController.m
-analogprefs_FRAMEWORKS = UIKit
+analogprefs_FRAMEWORKS = UIKit Foundation CoreFoundation
 analogprefs_PRIVATE_FRAMEWORKS = Preferences
 analogprefs_INSTALL_PATH = /Library/PreferenceBundles
 analogprefs_CFLAGS = -fobjc-arc -Wall -Wextra -Wno-unused-parameter
