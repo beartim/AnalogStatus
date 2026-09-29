@@ -20,7 +20,6 @@ static const void *ASDateLabelKey = &ASDateLabelKey;
 static const void *ASTimerKey = &ASTimerKey;
 static const void *ASLastMinuteKey = &ASLastMinuteKey;
 static const void *ASLastLayoutStateKey = &ASLastLayoutStateKey;
-static const void *ASChargingHiddenKey = &ASChargingHiddenKey;
 static const void *ASNativeLabelHiddenStateKey = &ASNativeLabelHiddenStateKey;
 
 static void ASUpdateDateFromDateView(id dateView);
@@ -118,12 +117,6 @@ static void ASApplyLockLayout(id controller, BOOL forceImage) {
     UIImageView *clockView = ASClockImageView(controller);
     UILabel *dateLabel = ASDateLabel(controller);
     if (!container || !clockView || !dateLabel) return;
-
-    NSNumber *chargingHidden = objc_getAssociatedObject(controller, ASChargingHiddenKey);
-    if (chargingHidden.boolValue) {
-        container.hidden = YES;
-        return;
-    }
 
     BOOL showingMedia = [controller respondsToSelector:@selector(isShowingMediaControls)] &&
                         [controller isShowingMediaControls];
@@ -225,7 +218,18 @@ static void ASInstallLockClock(id controller) {
     if (!controller || !gLockScreenEnabled) return;
     gCurrentLockController = controller;
 
+    /*
+     * SpringBoard can rebuild SBLockScreenView's horizontal scroll view across
+     * a display sleep/wake cycle while reusing the controller. Keep the
+     * associated clock views, but always verify that they are attached to the
+     * controller's current scroll view before showing them again.
+     */
+    UIScrollView *scrollView = ASLockScrollView(controller);
+    if (!scrollView) return;
+
     UIView *container = ASContainer(controller);
+    BOOL needsForceImage = NO;
+
     if (!container) {
         container = [[UIView alloc] initWithFrame:CGRectZero];
         container.backgroundColor = [UIColor clearColor];
@@ -245,17 +249,20 @@ static void ASInstallLockClock(id controller) {
         [container addSubview:clockView];
         [container addSubview:dateLabel];
 
-        UIScrollView *scrollView = ASLockScrollView(controller);
-        if (!scrollView) return;
-        [scrollView addSubview:container];
-
         objc_setAssociatedObject(controller, ASContainerKey, container, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(controller, ASClockImageViewKey, clockView, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(controller, ASDateLabelKey, dateLabel, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        needsForceImage = YES;
+    }
+
+    if (container.superview != scrollView) {
+        [container removeFromSuperview];
+        [scrollView addSubview:container];
+        needsForceImage = YES;
     }
 
     ASScheduleClockTimer(controller);
-    ASApplyLockLayout(controller, YES);
+    ASApplyLockLayout(controller, needsForceImage);
 }
 
 static void ASSetOriginalDateViewHidden(id dateView, BOOL hidden) {
@@ -393,8 +400,8 @@ static void ASPrefsChanged(CFNotificationCenterRef center,
 }
 
 - (void)viewDidDisappear:(BOOL)animated {
-    ASStopClockTimer(self);
     %orig;
+    ASStopClockTimer(self);
 }
 
 - (BOOL)_shouldShowChargingText {
@@ -404,7 +411,10 @@ static void ASPrefsChanged(CFNotificationCenterRef center,
 
 - (void)_addBatteryChargingViewAndShowBattery:(BOOL)showBattery {
     if (gLockScreenEnabled) {
-        objc_setAssociatedObject(self, ASChargingHiddenKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        /*
+         * Match 1.3-4: charging presentation temporarily hides the analog
+         * clock, but no persistent "charging hidden" state is kept.
+         */
         ASSetLockClockHidden(self, YES);
     }
     %orig;
@@ -412,8 +422,7 @@ static void ASPrefsChanged(CFNotificationCenterRef center,
 
 - (void)_removeBatteryChargingView {
     %orig;
-    objc_setAssociatedObject(self, ASChargingHiddenKey, @NO, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    if (gLockScreenEnabled) ASApplyLockLayout(self, YES);
+    if (gLockScreenEnabled) ASInstallLockClock(self);
 }
 %end
 
@@ -426,7 +435,15 @@ static void ASPrefsChanged(CFNotificationCenterRef center,
     %orig;
     gCurrentDateView = self;
     ASSetOriginalDateViewHidden(self, gLockScreenEnabled);
-    if (gLockScreenEnabled) ASUpdateDateFromDateView(self);
+    if (gLockScreenEnabled) {
+        /*
+         * The date view is laid out again when the iOS 9 lock screen wakes.
+         * Use that reliable callback to restart the timer and reattach the
+         * clock if SpringBoard replaced the horizontal scroll view.
+         */
+        if (gCurrentLockController) ASInstallLockClock(gCurrentLockController);
+        ASUpdateDateFromDateView(self);
+    }
 }
 %end
 
