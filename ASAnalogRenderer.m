@@ -7,9 +7,30 @@ static NSCache *ASClockCache(void) {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         cache = [NSCache new];
-        cache.countLimit = 24;
+
+        /*
+         * A 203.5 pt lock-screen bitmap is roughly 1.5 MB at @3x. Keeping 24
+         * minute variants, as the first optimized build did, can therefore
+         * waste tens of megabytes inside SpringBoard on Plus-class devices.
+         * Only a handful of recent variants are useful, so cap both object
+         * count and decoded bitmap cost.  iOS may evict even earlier.
+         */
+        cache.countLimit = 8;
+        cache.totalCostLimit = 6 * 1024 * 1024;
     });
     return cache;
+}
+
+static NSUInteger ASImageCost(UIImage *image) {
+    CGImageRef cgImage = image.CGImage;
+    if (!cgImage) return 1;
+
+    size_t bytesPerRow = CGImageGetBytesPerRow(cgImage);
+    size_t height = CGImageGetHeight(cgImage);
+    if (bytesPerRow == 0 || height == 0) return 1;
+
+    unsigned long long cost = (unsigned long long)bytesPerRow * (unsigned long long)height;
+    return cost > NSUIntegerMax ? NSUIntegerMax : (NSUInteger)cost;
 }
 
 static NSString *ASColorKey(UIColor *color) {
@@ -109,7 +130,9 @@ UIImage *ASAnalogClockImage(CGFloat diameter,
     UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
     UIGraphicsEndImageContext();
 
-    if (image) [ASClockCache() setObject:image forKey:cacheKey];
+    if (image) {
+        [ASClockCache() setObject:image forKey:cacheKey cost:ASImageCost(image)];
+    }
     return image;
 }
 
