@@ -42,9 +42,9 @@ The previous reconstruction hid the native time/date labels when enabled, but re
 
 Date text is read from `_dateLabel` first and falls back to `_legibilityDateLabel`. This covers the two label paths visible in the historical 1.3-4 binary and avoids an empty custom date if one implementation path is absent.
 
-### 5. Host-view geometry
+### 5. Historical Lock Screen geometry
 
-The large clock now uses the actual lock-screen host view/superview width when available, falling back to `UIScreen` only when necessary. This is safer on iPad and for any non-default SpringBoard geometry.
+The optimized build now follows the 1.3-4 binary's actual update geometry rather than a normalized container size. The overlay begins at `x = screenWidth`, uses `screenHeight` as its width, and uses 225 pt / 140 pt heights for the no-notification / notification layouts. The clock image remains centered from `screenWidth`, matching the historical iOS 9 lock-screen page.
 
 ### 6. Status-bar return-type safety
 
@@ -54,9 +54,15 @@ If `_UILegibilityImageSet` is unavailable, `contentsImage` now returns the origi
 
 The one-second timer is retained because notification/media/charging visibility can change independently of the minute. The expensive analog-clock bitmap is not rebuilt every second: it is regenerated only when the minute changes, notification layout state changes, or a forced refresh is requested. A real `NSCache` stores generated images.
 
-### 8. Legacy compiler compatibility
+The bitmap geometry itself has been realigned to the 1.3-4 arm64 binary: canvas edge `diameter + lineWidth + 1`, oval origin `lineWidth - 0.5`, hand origin at `diameter / 2`, and the original `minuteFraction / 1.9` hour-hand compensation are preserved for visual fidelity.
 
-Lightweight Objective-C generics/nullability syntax was removed from the small renderer API so older iOS 9-era Linux clang toolchains are less likely to reject the source. The project retains an iOS 7.0 deployment target and now defaults to the maintained patched iPhoneOS 9.3 SDK for GitHub Actions. A locally installed iPhoneOS 9.2 SDK can still be selected with `IOS_SDK_VERSION=9.2`; both choices remain within the iOS 9 SDK generation targeted by this compatibility audit.
+### 8. Legacy compiler and preference compatibility
+
+Lightweight Objective-C generics/nullability syntax was removed from the small renderer API so older iOS 9-era Linux clang toolchains are less likely to reject the source. CoreFoundation is linked explicitly because the tweak uses CFPreferences and Darwin notifications.
+
+Preference reads use `CFPreferences` first, then fall back to the exact plist path used by 1.3-4 when the domain value is unavailable. This keeps modernized preference handling while retaining compatibility with older iOS 9 jailbreak/cfprefsd behavior.
+
+The project retains an iOS 7.0 deployment target and builds against the historical iPhoneOS 9.2 SDK in CI.
 
 ## iOS 9 runtime test matrix still required on hardware
 

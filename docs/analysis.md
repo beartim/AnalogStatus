@@ -40,6 +40,8 @@ No public changelog located during this analysis states the author's motivation.
 - Original Lock Screen labels are hidden, never removed.
 - Timer is restarted in `viewWillAppear:` and stopped in `viewDidDisappear:`.
 - The 1-second timer performs only a cheap state check; image rendering occurs only when the minute changes or notification layout changes.
-- Real `NSCache` keyed by minute, geometry, line width and color.
+- Real `NSCache` keyed by minute, geometry, line width and color; the rendered bitmap still follows the historical 1.3-4 canvas size, oval offset and `/1.9` hour-hand minute compensation.
 - The 20-point layout correction is applied only to `UIStatusBarTimeItemView`.
-- Lock Screen layout uses the historical 200-point full clock and 119-point notification clock geometry, but centers it from the current screen width instead of assuming a fixed device width.
+- Lock Screen layout restores the 1.3-4 update geometry: the overlay starts at `x = screenWidth`, uses `screenHeight` as its width, and switches between the historical 225/140 pt heights with 200/119 pt clocks.
+- Charging presentation state is tracked so the one-second timer cannot unhide the clock while charging UI is active, but that state is cleared on `viewDidDisappear:` to avoid a stale hidden flag after sleep/wake.
+- Preference reads use `CFPreferences` first and fall back to the original `/var/mobile/Library/Preferences/com.faz.analogprefs.plist` path when the domain value is unavailable.

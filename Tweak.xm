@@ -7,6 +7,7 @@
 #import "ASAnalogRenderer.h"
 
 static NSString * const ASPrefsDomain = @"com.faz.analogprefs";
+static NSString * const ASLegacyPrefsPath = @"/var/mobile/Library/Preferences/com.faz.analogprefs.plist";
 static CFStringRef const ASPrefsChangedNotification = CFSTR("com.faz.analogprefs/ReloadPrefs");
 
 static BOOL gStatusBarEnabled = YES;
@@ -20,6 +21,7 @@ static const void *ASDateLabelKey = &ASDateLabelKey;
 static const void *ASTimerKey = &ASTimerKey;
 static const void *ASLastMinuteKey = &ASLastMinuteKey;
 static const void *ASLastLayoutStateKey = &ASLastLayoutStateKey;
+static const void *ASChargingActiveKey = &ASChargingActiveKey;
 static const void *ASNativeLabelHiddenStateKey = &ASNativeLabelHiddenStateKey;
 
 static void ASUpdateDateFromDateView(id dateView);
@@ -46,26 +48,43 @@ static id ASSafeValueForKey(id object, NSString *key) {
     }
 }
 
-static BOOL ASPreferenceBool(NSString *key, BOOL fallback) {
-    CFPreferencesAppSynchronize((__bridge CFStringRef)ASPrefsDomain);
+static BOOL ASPreferenceBool(NSString *key, BOOL fallback, NSDictionary *legacyPrefs) {
     CFPropertyListRef value = CFPreferencesCopyAppValue((__bridge CFStringRef)key,
                                                          (__bridge CFStringRef)ASPrefsDomain);
-    if (!value) return fallback;
-    BOOL result = fallback;
-    if (CFGetTypeID(value) == CFBooleanGetTypeID()) {
-        result = CFBooleanGetValue((CFBooleanRef)value);
-    } else if (CFGetTypeID(value) == CFNumberGetTypeID()) {
-        int number = fallback ? 1 : 0;
-        CFNumberGetValue((CFNumberRef)value, kCFNumberIntType, &number);
-        result = number != 0;
+    if (value) {
+        BOOL result = fallback;
+        if (CFGetTypeID(value) == CFBooleanGetTypeID()) {
+            result = CFBooleanGetValue((CFBooleanRef)value);
+        } else if (CFGetTypeID(value) == CFNumberGetTypeID()) {
+            int number = fallback ? 1 : 0;
+            CFNumberGetValue((CFNumberRef)value, kCFNumberIntType, &number);
+            result = number != 0;
+        } else if ([(__bridge id)value respondsToSelector:@selector(boolValue)]) {
+            result = [(__bridge id)value boolValue];
+        }
+        CFRelease(value);
+        return result;
     }
-    CFRelease(value);
-    return result;
+
+    /*
+     * AnalogStatus 1.3-4 read this plist directly.  CFPreferences is preferred
+     * in the optimized build, but a direct-file fallback keeps the historical
+     * behavior available in UIKit processes where cfprefsd/domain lookup can
+     * lag or fail on older iOS 9 jailbreak environments.
+     */
+    id legacyValue = [legacyPrefs objectForKey:key];
+    if ([legacyValue respondsToSelector:@selector(boolValue)]) {
+        return [legacyValue boolValue];
+    }
+    return fallback;
 }
 
 static void ASLoadPreferences(void) {
-    gStatusBarEnabled = ASPreferenceBool(@"SBEnabled", YES);
-    gLockScreenEnabled = ASPreferenceBool(@"LSEnabled", NO);
+    CFPreferencesAppSynchronize((__bridge CFStringRef)ASPrefsDomain);
+    NSDictionary *legacyPrefs = [NSDictionary dictionaryWithContentsOfFile:ASLegacyPrefsPath];
+
+    gStatusBarEnabled = ASPreferenceBool(@"SBEnabled", YES, legacyPrefs);
+    gLockScreenEnabled = ASPreferenceBool(@"LSEnabled", NO, legacyPrefs);
     ASClearAnalogClockCache();
 }
 
@@ -118,6 +137,12 @@ static void ASApplyLockLayout(id controller, BOOL forceImage) {
     UILabel *dateLabel = ASDateLabel(controller);
     if (!container || !clockView || !dateLabel) return;
 
+    NSNumber *chargingActive = objc_getAssociatedObject(controller, ASChargingActiveKey);
+    if (chargingActive.boolValue) {
+        container.hidden = YES;
+        return;
+    }
+
     BOOL showingMedia = [controller respondsToSelector:@selector(isShowingMediaControls)] &&
                         [controller isShowingMediaControls];
     if (showingMedia) {
@@ -136,15 +161,23 @@ static void ASApplyLockLayout(id controller, BOOL forceImage) {
      * x == 0 is the adjacent page.  Keep the original constants recovered
      * from the arm64 binary so the analog clock moves with the native page.
      */
-    CGFloat screenWidth = CGRectGetWidth([UIScreen mainScreen].bounds);
+    CGRect screenBounds = [UIScreen mainScreen].bounds;
+    CGFloat screenWidth = CGRectGetWidth(screenBounds);
+    CGFloat screenHeight = CGRectGetHeight(screenBounds);
     CGFloat diameter = hasNotifications ? 119.0 : 200.0;
     CGFloat hourLength = hasNotifications ? 29.75 : 50.0;
     CGFloat minuteLength = hasNotifications ? 50.575 : 85.0;
     CGFloat containerY = hasNotifications ? 28.5 : 30.0;
-    CGFloat containerSize = hasNotifications ? 140.0 : 225.0;
+    CGFloat containerHeight = hasNotifications ? 140.0 : 225.0;
     CGFloat dateY = hasNotifications ? 121.0 : 202.0;
 
-    container.frame = CGRectMake(screenWidth, containerY, containerSize, containerSize);
+    /*
+     * Match the 1.3-4 updateAnalogImage frame exactly: the overlay begins at
+     * x == screenWidth, spans screenHeight horizontally, and uses a 140/225 pt
+     * height.  The image/date subviews retain their historical screen-width
+     * centering inside that oversized, unclipped container.
+     */
+    container.frame = CGRectMake(screenWidth, containerY, screenHeight, containerHeight);
     clockView.frame = CGRectMake((screenWidth - diameter) * 0.5, 0.0, diameter, diameter);
     dateLabel.frame = CGRectMake(0.0, dateY, screenWidth, 21.0);
 
@@ -401,6 +434,13 @@ static void ASPrefsChanged(CFNotificationCenterRef center,
 
 - (void)viewDidDisappear:(BOOL)animated {
     %orig;
+
+    /*
+     * Charging presentation is transient state.  Clear it when this lock
+     * screen disappears so a sleep/wake cycle cannot retain a stale hidden
+     * flag if SpringBoard omits the matching removal callback.
+     */
+    objc_setAssociatedObject(self, ASChargingActiveKey, @NO, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     ASStopClockTimer(self);
 }
 
@@ -412,9 +452,11 @@ static void ASPrefsChanged(CFNotificationCenterRef center,
 - (void)_addBatteryChargingViewAndShowBattery:(BOOL)showBattery {
     if (gLockScreenEnabled) {
         /*
-         * Match 1.3-4: charging presentation temporarily hides the analog
-         * clock, but no persistent "charging hidden" state is kept.
+         * 1.3-4 keeps the analog clock hidden for the whole charging
+         * presentation.  Track that transient state so the one-second layout
+         * timer cannot immediately unhide the container again.
          */
+        objc_setAssociatedObject(self, ASChargingActiveKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         ASSetLockClockHidden(self, YES);
     }
     %orig;
@@ -422,6 +464,7 @@ static void ASPrefsChanged(CFNotificationCenterRef center,
 
 - (void)_removeBatteryChargingView {
     %orig;
+    objc_setAssociatedObject(self, ASChargingActiveKey, @NO, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     if (gLockScreenEnabled) ASInstallLockClock(self);
 }
 %end

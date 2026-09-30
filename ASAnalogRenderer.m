@@ -1,5 +1,6 @@
 #import "ASAnalogRenderer.h"
 #import <dispatch/dispatch.h>
+#include <math.h>
 
 static NSCache *ASClockCache(void) {
     static NSCache *cache;
@@ -46,22 +47,46 @@ UIImage *ASAnalogClockImage(CGFloat diameter,
     UIImage *cached = [ASClockCache() objectForKey:cacheKey];
     if (cached) return cached;
 
-    CGSize size = CGSizeMake(diameter, diameter);
-    UIGraphicsBeginImageContextWithOptions(size, NO, 0.0);
+    /*
+     * Preserve the geometry used by AnalogStatus 1.3-4.  The old selector
+     * called this value "clockRadius", but it was used as the oval's width
+     * and height.  Its bitmap was slightly larger than that oval:
+     *
+     *   canvas = diameter + lineWidth + 1
+     *   oval   = (lineWidth - 0.5, lineWidth - 0.5, diameter, diameter)
+     *
+     * The hand origin intentionally remains diameter / 2 rather than the
+     * geometric center of the offset oval.  This small asymmetry is visible
+     * in the original binary and is retained for visual fidelity.
+     */
+    const CGFloat canvasEdge = diameter + lineWidth + 1.0;
+    const CGSize size = CGSizeMake(canvasEdge, canvasEdge);
+    const CGFloat scale = [UIScreen mainScreen].scale;
+    UIGraphicsBeginImageContextWithOptions(size, NO, scale);
 
-    const CGPoint center = CGPointMake(diameter * 0.5, diameter * 0.5);
-    const CGFloat circleInset = lineWidth * 0.5;
-    UIBezierPath *circle = [UIBezierPath bezierPathWithOvalInRect:CGRectInset((CGRect){CGPointZero, size},
-                                                                              circleInset,
-                                                                              circleInset)];
+    UIBezierPath *circle = [UIBezierPath bezierPathWithOvalInRect:CGRectMake(lineWidth - 0.5,
+                                                                             lineWidth - 0.5,
+                                                                             diameter,
+                                                                             diameter)];
     circle.lineWidth = lineWidth;
     [color setStroke];
     [circle stroke];
 
-    const CGFloat hourFraction = (fmod((double)hour, 12.0) + ((double)minute / 60.0)) / 12.0;
-    const CGFloat minuteFraction = (double)minute / 60.0;
-    const CGFloat hourAngle = (CGFloat)(hourFraction * M_PI * 2.0 - M_PI_2);
-    const CGFloat minuteAngle = (CGFloat)(minuteFraction * M_PI * 2.0 - M_PI_2);
+    const CGPoint center = CGPointMake(diameter * 0.5, diameter * 0.5);
+    const CGFloat minuteFraction = (CGFloat)minute / 60.0;
+    const CGFloat hourFraction = (CGFloat)fmod((double)hour, 12.0) / 12.0;
+
+    /*
+     * Keep the original 1.3-4 hand-angle math.  In particular, its hour-hand
+     * minute compensation is minuteFraction / 1.9 rather than the exact
+     * minuteFraction * (2*pi/12).  The values are close, but matching the old
+     * formula avoids a subtle visual drift from the historical package.
+     */
+    const CGFloat hourAngle = hourFraction * (CGFloat)(M_PI * 2.0)
+                            - (CGFloat)M_PI_2
+                            + minuteFraction / 1.9;
+    const CGFloat minuteAngle = minuteFraction * (CGFloat)(M_PI * 2.0)
+                              - (CGFloat)M_PI_2;
 
     UIBezierPath *hourHand = [UIBezierPath bezierPath];
     hourHand.lineCapStyle = kCGLineCapRound;
@@ -78,6 +103,7 @@ UIImage *ASAnalogClockImage(CGFloat diameter,
     [minuteHand moveToPoint:center];
     [minuteHand addLineToPoint:CGPointMake(center.x + cos(minuteAngle) * minuteHandLength,
                                            center.y + sin(minuteAngle) * minuteHandLength)];
+    [color setStroke];
     [minuteHand stroke];
 
     UIImage *image = UIGraphicsGetImageFromCurrentImageContext();

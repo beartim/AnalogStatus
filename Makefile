@@ -6,7 +6,7 @@ include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = AnalogStatus
 AnalogStatus_FILES = Tweak.xm ASAnalogRenderer.m
-AnalogStatus_FRAMEWORKS = UIKit Foundation CoreGraphics
+AnalogStatus_FRAMEWORKS = UIKit Foundation CoreFoundation CoreGraphics
 AnalogStatus_CFLAGS = -fobjc-arc -Wall -Wextra -Wno-unused-parameter
 
 include $(THEOS_MAKE_PATH)/tweak.mk
