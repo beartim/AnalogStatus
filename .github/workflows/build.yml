@@ -75,10 +75,15 @@ jobs:
           make --version
           dpkg-deb --version
 
+      - name: Verify iOS 9 phone layout matrix
+        run: |
+          set -euxo pipefail
+          python3 scripts/check-device-layout.py
+
       - name: Build rootful iOS 9 package
         run: |
           set -o pipefail
-          chmod +x build-ios9.sh scripts/verify-package.sh scripts/check-fat-mach-o.py
+          chmod +x build-ios9.sh scripts/verify-package.sh scripts/check-fat-mach-o.py scripts/check-device-layout.py
           ./build-ios9.sh 2>&1 | tee build.log
 
       - name: Verify DEB metadata, files and architectures
